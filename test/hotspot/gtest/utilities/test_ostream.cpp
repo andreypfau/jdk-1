@@ -29,6 +29,7 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ostream.hpp"
 
+#include <wchar.h>
 #include "unittest.hpp"
 
 static size_t print_lorem(outputStream* st) {
@@ -120,6 +121,28 @@ TEST_VM(ostream, bufferedStream_dynamic_small) {
     ASSERT_EQ(bs.size(), written);
   }
 }
+
+#ifndef ASSERT
+// In debug builds, an encoding error should result in an assert. We do not test this here.
+// In release builds, an encoding error should be swallowed silently.
+TEST_VM(ostream, encoding_error) {
+  const wchar_t w[] = { (wchar_t)-1, 0 };
+  char buf[20];
+  ::memset(buf, 'X', sizeof(buf));
+  int n = ::snprintf(buf + 1, sizeof(buf) - 2, "HALLO %ls", w);
+  if (n == -1) { // yes, we get an error. Retry using stringStream.
+    ::memset(buf, 'X', sizeof(buf));
+    stringStream ss (buf + 1, sizeof(buf) - 2);
+    ss.print_cr("HALLO %ls", w);
+    // We should not have crashed or asserted in the libc or anything else.
+    // We should not have overstepped the buffer boundaries either.
+    ASSERT_EQ(buf[0], 'X');
+    ASSERT_EQ(buf[sizeof(buf) - 1], 'X');
+    // The resulting buffer should have length zero
+    ASSERT_EQ(buf[1], '\0');
+  }
+}
+#endif
 
 /* Activate to manually test bufferedStream dynamic cap.
 
